@@ -18,7 +18,7 @@ class Scraper:
         self.universities = {}         # Dictionary to store universities and their occurrences
         self.collabs = {}              # Dictionary to store collaborations between universities
         self.mapping_univs = {}        # Mapping old university names to new names
-        self.links_saved = []          # List to save article links used after
+        self.links_saved = []         # List to save article links used after
 
     # Method to load collaboration data from a JSON file
     def load_collabs(self, filename):
@@ -33,12 +33,16 @@ class Scraper:
     # Method to load saved links from a JSON file
     def load_links(self, filename):
         with open(filename, 'r') as file:
-            self.links = json.load(file)
+            self.links_saved = json.load(file)
 
     # Method to save universities data to a JSON file
-    def save_universities_in_file(self):
-        with open('universities.json', 'w') as fp:
-            json.dump(self.universities, fp)
+    def save_universities_in_file(self, preprocess=True):
+        if preprocess:
+            with open('universities.json', 'w') as fp:
+                json.dump(self.universities, fp)
+        else:
+            with open('universities_without_preprocess.json', 'w') as fp:
+                json.dump(self.universities, fp)
 
     # Method to save collaborations data to a JSON file
     def save_collabs_in_file(self):
@@ -64,12 +68,14 @@ class Scraper:
                     self.mapping_univs[old_name] = new_name
 
     # Method to extract universities and collaboration data from nature.com articles
-    def extract_universities(self):
+    def extract_universities(self, subject):
+        init_univs_len = len(self.universities)
+        init_links_len = len(self.links_saved)
         articles_counter = 1
         page = 1
 
         while True:
-            search_url = f'{self.base_url}/search?journal=srep&article_type=research&subject=mathematics-and-computing&date_range=last_year&order=relevance&page={page}'
+            search_url = f'{self.base_url}/search?journal=srep&article_type=research&subject={subject}&date_range=last_year&order=relevance&page={page}'
             soup = self.retrieve_url(search_url)
 
             all_atags = soup.find_all('a', {'data-track-action': 'view article'})
@@ -82,21 +88,20 @@ class Scraper:
 
                 if(random.random() < 0.5):
                     self.parse_page(self.base_url + atag['href'], univs=True, collabs=False)
-                    print(f"[EXTRACTING UNIVS] {articles_counter} articles and {len(self.universities)} universities found")
                 else:
-                    self.links_saved.append(atag['href'])
-                    print(f"[EXTRACTING UNIVS] {articles_counter} articles found and {len(self.links_saved)} links saved")
+                    self.links_saved.append((atag['href'], subject))
 
                 articles_counter += 1            
             page += 1
+        print(f"Extracted {len(self.universities) - init_univs_len} universites and {len(self.links_saved) - init_links_len} links for {subject} ({articles_counter} articles).\n")
 
     # Method to extract collaboration data from nature.com articles
-    def extract_collabs(self):
+    def extract_collabs(self, subject):
         articles_counter = 1
         page = 1
 
         while True:
-            search_url = f'{self.base_url}/search?journal=srep&article_type=research&subject=mathematics-and-computing&date_range=last_year&order=relevance&page={page}'
+            search_url = f'{self.base_url}/search?journal=srep&article_type=research&subject={subject}&date_range=last_year&order=relevance&page={page}'
             soup = self.retrieve_url(search_url)
 
             all_atags = soup.find_all('a', {'data-track-action': 'view article'})
@@ -109,9 +114,9 @@ class Scraper:
 
                 if(random.random() < 0.5):
                     self.parse_page(self.base_url + atag['href'], univs=False, collabs=True)
-                    print(f"[EXTRACTING COLLABS] {articles_counter} articles done")
                 articles_counter += 1  
             page += 1
+        print(f"Extracted collabs in {articles_counter} articles for {subject}\n")
 
     # Method to print statistics about extracted data
     def print_stats(self):
@@ -158,9 +163,7 @@ class Scraper:
                             try:
                                 other_university = self.mapping_univs[s2.text]
                                 if other_university not in alreadyAddedUniv:
-                                    for sub in subjects_all:
-                                        subject = sub.get('content')
-                                        if university != other_university:
+                                    if university != other_university:
                                             if other_university not in self.collabs[university]:
                                                 self.collabs[university][other_university] = {}
 
@@ -188,7 +191,7 @@ class Scraper:
             # Look for patterns that match university names
             university = None
             for part in reversed(parts):
-                if any(keyword in part for keyword in ["Polytechnic", "NIT", "MIT", "Politecnico", "Escuela", "École", "Institut", "Universitat", "Università", "Universität", "Universidad", "University", "Institute", "Ecole", "Universiti", "Université", "College", "School", "MIT"]):
+                if any(keyword in part for keyword in ["Polytechnic", "NIT", "MIT", "Politecnico", "Escuela", "École", "Universitat", "Università", "Universität", "Universidad", "University", "Ecole", "Universiti", "Université", "College", "School"]):
                     university = part.strip()
                     break
 
@@ -198,9 +201,9 @@ class Scraper:
                     universities[university]['init_names'].append(entry)
                     universities[university]['count'] += count
                 else:
-                    universities[university] = {"init_names": [entry], "count": count}
-            else:
-                print(f"Not accepted this uni: {entry}")
+                    universities[university] = {"init_names": [entry], "count": count, 'country': entry.split(',')[-1].strip()}
+            # else:
+            #     print(f"Not accepted this uni: {entry}")
             
         model = SentenceTransformer('paraphrase-MiniLM-L6-v2')
 
@@ -236,16 +239,46 @@ class Scraper:
         for gr in similar_groups:
             first_uni = gr[0]
 
-            for uni in gr[1:]:
-                if first_uni in universities and uni in universities:
-                    if 'init_names' not in universities[first_uni]:
-                        universities[first_uni]['init_names'] = []
-                    if 'count' not in universities[first_uni]:
-                        universities[first_uni]['count'] = 0
-                    universities[first_uni]['init_names'].extend(universities[uni].get('init_names', []))
-                    universities[first_uni]['count'] = universities.get(first_uni, {}).get('count', 0) + universities.get(uni, {}).get('count', 0)
-                    universities.pop(uni)
+            if first_uni in universities:
+                if 'init_names' not in universities[first_uni]:
+                    universities[first_uni]['init_names'] = first_uni['init_names']
+                if 'count' not in universities[first_uni]:
+                    universities[first_uni]['count'] = first_uni['count']
+                for uni in gr[1:]:
+                    if uni in universities:
+                        universities[first_uni]['init_names'].extend(universities[uni].get('init_names', []))
+                        universities[first_uni]['count'] = universities.get(first_uni, {}).get('count', 0) + universities.get(uni, {}).get('count', 0)
+                        if 'country' not in universities[first_uni] and 'country' in uni:
+                            universities[first_uni]['country'] = uni['country']
+                        
+                        universities.pop(uni)
 
         universities = {key.strip(): value for key, value in universities.items()}
 
         self.universities = universities
+
+
+scraper = Scraper()
+subjects = ['physics', 'astronomy-and-planetary-science', 'climate-sciences', 'ecology', 'genetics', 'microbiology', 'diseases', 'health-care', 'mathematics-and-computing']
+
+for subject in subjects:
+    print(f"Extracting universites for {subject}.")
+    scraper.extract_universities(subject)
+    scraper.save_universities_in_file(preprocess=False)
+    scraper.save_links_in_file()
+
+print(f"# nodes before preprocess: {len(scraper.universities)}\n")
+
+print("Preprocessing universites data.")
+scraper.preprocess_universities()
+scraper.save_universities_in_file()
+print("Ended the preprocessing universites data.\n")
+
+scraper.create_map()
+
+print(f"# nodes after preprocess: {len(scraper.universities)}\n")
+
+for subject in subjects:
+    print(f"Extracting collabs for {subject}.")
+    scraper.extract_collabs(subject)
+    scraper.save_collabs_in_file()
