@@ -3,7 +3,6 @@ import requests
 import os, re
 from datetime import datetime
 from bs4 import BeautifulSoup
-import pdfkit
 import json
 import random
 
