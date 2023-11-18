@@ -259,26 +259,33 @@ class Scraper:
 
 
 scraper = Scraper()
-subjects = ['physics', 'astronomy-and-planetary-science', 'climate-sciences', 'ecology', 'genetics', 'microbiology', 'diseases', 'health-care', 'mathematics-and-computing']
+scraper.load_universities('universities.json')
+# subjects = ['physics', 'ecology', 'genetics', 'microbiology', 'diseases', 'health-care', 'mathematics-and-computing']
 
-for subject in subjects:
-    print(f"Extracting universites for {subject}.")
-    scraper.extract_universities(subject)
-    scraper.save_universities_in_file(preprocess=False)
-    scraper.save_links_in_file()
+# for subject in subjects:
+#     print(f"Extracting universites for {subject}.")
+#     scraper.extract_universities(subject)
+#     scraper.save_universities_in_file(preprocess=False)
+#     scraper.save_links_in_file()
 
-print(f"# nodes before preprocess: {len(scraper.universities)}\n")
+# print(f"# nodes before preprocess: {len(scraper.universities)}\n")
 
-print("Preprocessing universites data.")
-scraper.preprocess_universities()
-scraper.save_universities_in_file()
-print("Ended the preprocessing universites data.\n")
+# print("Preprocessing universites data.")
+# scraper.preprocess_universities()
+# scraper.save_universities_in_file()
+# print("Ended the preprocessing universites data.\n")
 
 scraper.create_map()
 
-print(f"# nodes after preprocess: {len(scraper.universities)}\n")
+# print(f"# nodes after preprocess: {len(scraper.universities)}\n")
+
+scraper.load_collabs('collabs.json')
+subjects = ['mathematics-and-computing']
 
 for subject in subjects:
     print(f"Extracting collabs for {subject}.")
     scraper.extract_collabs(subject)
     scraper.save_collabs_in_file()
+
+scraper.load_links('links.json')
+scraper.print_stats()
