@@ -87,7 +87,8 @@ class Scraper:
                 random.seed(articles_counter)
 
                 if(random.random() < 0.5):
-                    self.parse_page(self.base_url + atag['href'], univs=True, collabs=False)
+                    continue
+                    # self.parse_page(self.base_url + atag['href'], univs=True, collabs=False)
                 else:
                     self.links_saved.append((atag['href'], subject))
 
